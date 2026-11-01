@@ -1,0 +1,15 @@
+{
+  "name": "autoflow",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "concurrently -n server,client \"npm --prefix server run dev\" \"npm --prefix apps/client run dev -- --host 0.0.0.0\"",
+    "dev:server": "npm --prefix server run dev",
+    "dev:client": "npm --prefix apps/client run dev -- --host 0.0.0.0",
+    "build": "npm --prefix apps/client run build && npm --prefix server run build",
+    "test": "npm --prefix server run test"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}
