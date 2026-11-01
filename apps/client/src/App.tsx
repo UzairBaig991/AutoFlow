@@ -1,11 +1,16 @@
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import { BrowserRouter, Link, Navigate, Outlet, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Activity, BarChart3, Bell, Boxes, ChevronDown, CircleHelp, LayoutDashboard, LogOut, Menu, Plus, Settings2, Workflow as WorkflowIcon } from 'lucide-react';
+import { Activity, BarChart3, Bell, ChevronDown, CircleHelp, LayoutDashboard, LogOut, Menu, Moon, Plus, Settings2, Sun, Workflow as WorkflowIcon } from 'lucide-react';
 import { apiRequest, getCurrentUser, type User } from './api';
-import { AdminPage, AnalyticsPage, DashboardPage, RunHistoryPage, WorkflowsPage } from './pages';
-import { WorkflowBuilder } from './workflow-builder';
 import './App.css';
+
+const DashboardPage = lazy(() => import('./pages').then((module) => ({ default: module.DashboardPage })));
+const WorkflowsPage = lazy(() => import('./pages').then((module) => ({ default: module.WorkflowsPage })));
+const RunHistoryPage = lazy(() => import('./pages').then((module) => ({ default: module.RunHistoryPage })));
+const AnalyticsPage = lazy(() => import('./pages').then((module) => ({ default: module.AnalyticsPage })));
+const AdminPage = lazy(() => import('./pages').then((module) => ({ default: module.AdminPage })));
+const WorkflowBuilder = lazy(() => import('./workflow-builder').then((module) => ({ default: module.WorkflowBuilder })));
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { refetchOnWindowFocus: false, retry: 1 } },
@@ -134,6 +139,7 @@ function AppLayout({ user }: { user: User }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [darkMode, setDarkMode] = useState(() => localStorage.getItem('autoflow-theme') === 'dark');
   const logout = useMutation({
     mutationFn: () => apiRequest('/api/auth/logout', { method: 'POST' }),
     onSuccess: () => {
@@ -144,7 +150,7 @@ function AppLayout({ user }: { user: User }) {
   const currentLabel = navigation.find(({ to, end }) => end ? location.pathname === to : location.pathname.startsWith(to))?.label ?? 'Workflow builder';
 
   return (
-    <div className="workspace-shell">
+    <div className="workspace-shell" data-theme={darkMode ? 'dark' : 'light'}>
       <aside className={`sidebar ${sidebarOpen ? 'sidebar-open' : ''}`}>
         <div className="sidebar-brand"><Brand /><button className="icon-btn mobile-close" onClick={() => setSidebarOpen(false)} aria-label="Close navigation">×</button></div>
         <div className="workspace-picker"><div className="workspace-avatar">W</div><span><strong>My workspace</strong><small>Personal workspace</small></span><ChevronDown size={15} /></div>
@@ -168,7 +174,7 @@ function AppLayout({ user }: { user: User }) {
         <header className="workspace-topbar">
           <button className="icon-btn mobile-menu" onClick={() => setSidebarOpen(true)} aria-label="Open navigation"><Menu size={19} /></button>
           <div className="breadcrumb"><span>Workspace</span><span className="breadcrumb-divider">/</span><strong>{currentLabel}</strong></div>
-          <div className="topbar-actions"><Link className="topbar-cta" to="/app/workflows/new"><Plus size={16} /> New workflow</Link><button className="icon-btn" title="Notifications" aria-label="Notifications"><Bell size={18} /></button><div className="topbar-avatar">{user.name.slice(0, 1).toUpperCase()}</div></div>
+          <div className="topbar-actions"><Link className="topbar-cta" to="/app/workflows/new"><Plus size={16} /> New workflow</Link><button className="icon-btn" title="Toggle theme" aria-label="Toggle theme" onClick={() => setDarkMode((value) => { const next = !value; localStorage.setItem('autoflow-theme', next ? 'dark' : 'light'); return next; })}>{darkMode ? <Sun size={18} /> : <Moon size={18} />}</button><button className="icon-btn" title="Notifications" aria-label="Notifications"><Bell size={18} /></button><div className="topbar-avatar">{user.name.slice(0, 1).toUpperCase()}</div></div>
         </header>
         <div className="page-content"><Outlet /></div>
       </div>
@@ -191,13 +197,13 @@ function AppRoutes() {
       <Route path="/login" element={user ? <Navigate to="/app" replace /> : <AuthPage mode="login" />} />
       <Route path="/register" element={user ? <Navigate to="/app" replace /> : <AuthPage mode="register" />} />
       <Route path="/app" element={user && !isError ? <AppLayout user={user} /> : <Navigate to="/login" replace />}>
-        <Route index element={<DashboardPage />} />
-        <Route path="workflows" element={<WorkflowsPage />} />
-        <Route path="workflows/new" element={<WorkflowBuilder />} />
-        <Route path="workflows/:id/edit" element={<WorkflowBuilder />} />
-        <Route path="runs" element={<RunHistoryPage />} />
-        <Route path="analytics" element={<AnalyticsPage />} />
-        <Route path="admin" element={<AdminPage />} />
+        <Route index element={<Suspense fallback={<div className="loading-inline">Loading workspace…</div>}><DashboardPage /></Suspense>} />
+        <Route path="workflows" element={<Suspense fallback={<div className="loading-inline">Loading workflows…</div>}><WorkflowsPage /></Suspense>} />
+        <Route path="workflows/new" element={<Suspense fallback={<div className="loading-inline">Loading builder…</div>}><WorkflowBuilder /></Suspense>} />
+        <Route path="workflows/:id/edit" element={<Suspense fallback={<div className="loading-inline">Loading builder…</div>}><WorkflowBuilder /></Suspense>} />
+        <Route path="runs" element={<Suspense fallback={<div className="loading-inline">Loading runs…</div>}><RunHistoryPage /></Suspense>} />
+        <Route path="analytics" element={<Suspense fallback={<div className="loading-inline">Loading analytics…</div>}><AnalyticsPage /></Suspense>} />
+        <Route path="admin" element={<Suspense fallback={<div className="loading-inline">Loading workspace tools…</div>}><AdminPage /></Suspense>} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

@@ -11,21 +11,21 @@ authRouter.post('/register', async (req, res, next) => {
         if (existing) {
             return res.status(409).json({ success: false, message: 'User already exists' });
         }
-        const passwordHash = await bcrypt.hash(data.password, 10);
-        const user = await prisma.user.create({
-            data: {
-                name: data.name,
-                email: data.email.toLowerCase(),
-                passwordHash,
-                role: 'OWNER',
-            },
-            select: { id: true, name: true, email: true, role: true, createdAt: true },
-        });
-        await prisma.workspace.create({
-            data: {
-                name: `${data.name}'s Workspace`,
-                ownerId: user.id,
-            },
+        const passwordHash = await bcrypt.hash(data.password, 12);
+        const user = await prisma.$transaction(async (transaction) => {
+            const createdUser = await transaction.user.create({
+                data: {
+                    name: data.name,
+                    email: data.email.toLowerCase(),
+                    passwordHash,
+                    role: 'OWNER',
+                },
+                select: { id: true, name: true, email: true, role: true, createdAt: true },
+            });
+            await transaction.workspace.create({
+                data: { name: `${data.name}'s Workspace`, ownerId: createdUser.id },
+            });
+            return createdUser;
         });
         const token = signToken(user.id);
         setAuthCookie(res, token);

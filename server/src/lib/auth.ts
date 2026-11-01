@@ -18,6 +18,14 @@ declare global {
 
 export const authCookieName = 'autoflow_session';
 
+function getJwtSecret() {
+  const secret = process.env.JWT_SECRET;
+  if (process.env.NODE_ENV === 'production' && (!secret || secret === 'change-me-in-production')) {
+    throw new Error('A production JWT_SECRET must be configured');
+  }
+  return secret ?? 'development-secret';
+}
+
 export const registerSchema = z.object({
   name: z.string().min(2).max(80),
   email: z.string().email(),
@@ -30,8 +38,7 @@ export const loginSchema = z.object({
 });
 
 export function signToken(userId: string) {
-  const secret = process.env.JWT_SECRET ?? 'development-secret';
-  return jwt.sign({ sub: userId }, secret, { expiresIn: '7d' });
+  return jwt.sign({ sub: userId }, getJwtSecret(), { expiresIn: '7d' });
 }
 
 export function setAuthCookie(res: Response, token: string) {
@@ -47,25 +54,30 @@ export async function getAuthenticatedUser(req: Request) {
   const token = req.cookies?.[authCookieName] ?? null;
   if (!token) return null;
 
+  let userId: string;
+  const secret = getJwtSecret();
   try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET ?? 'development-secret') as { sub: string };
-    const user = await prisma.user.findUnique({
-      where: { id: payload.sub },
-      select: { id: true, name: true, email: true, role: true },
-    });
-    return user;
+    const payload = jwt.verify(token, secret) as { sub: string };
+    if (typeof payload.sub !== 'string') return null;
+    userId = payload.sub;
   } catch {
     return null;
   }
+
+  return prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, name: true, email: true, role: true },
+  });
 }
 
-export async function requireAuth(req: Request, res: Response, next: NextFunction) {
-  const user = await getAuthenticatedUser(req);
-  if (!user) {
-    res.status(401).json({ success: false, message: 'Authentication required' });
-    return;
-  }
+export function requireAuth(req: Request, res: Response, next: NextFunction) {
+  getAuthenticatedUser(req).then((user) => {
+    if (!user) {
+      res.status(401).json({ success: false, message: 'Authentication required' });
+      return;
+    }
 
-  req.user = user;
-  next();
+    req.user = user;
+    next();
+  }).catch(next);
 }

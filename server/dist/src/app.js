@@ -6,6 +6,8 @@ import cookieParser from 'cookie-parser';
 import { authRouter } from './routes/auth.js';
 import { workflowsRouter } from './routes/workflows.js';
 import { analyticsRouter } from './routes/analytics.js';
+import { adminRouter, notificationsRouter, tasksRouter } from './routes/activity.js';
+import { runsRouter } from './routes/runs.js';
 import { prisma } from './lib/prisma.js';
 const app = express();
 app.use(helmet({
@@ -35,10 +37,16 @@ app.get('/api/health', async (_req, res) => {
 });
 app.use('/api/auth', authRouter);
 app.use('/api/workflows', workflowsRouter);
+app.use('/api/runs', runsRouter);
+app.use('/api/tasks', tasksRouter);
+app.use('/api/notifications', notificationsRouter);
 app.use('/api/analytics', analyticsRouter);
+app.use('/api/admin', adminRouter);
 app.use((error, _req, res, _next) => {
-    const statusCode = error.status ?? 500;
+    const statusCode = error.statusCode ?? error.status ?? 500;
     const isOperationalError = statusCode < 500;
+    if (!isOperationalError)
+        console.error(error);
     res.status(statusCode).json({
         success: false,
         message: isOperationalError ? error.message : 'Internal server error',

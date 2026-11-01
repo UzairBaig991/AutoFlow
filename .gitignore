@@ -1,1 +1,9 @@
-node_modules
+node_modules/
+**/node_modules/
+**/.env
+**/.env.*
+!**/.env.example
+**/dist/
+server/prisma/*.db
+server/prisma/*.db-journal
+*.log

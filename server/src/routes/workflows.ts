@@ -45,7 +45,7 @@ function parseStoredDefinition(serialized: string) {
   try {
     return JSON.parse(serialized) as unknown;
   } catch {
-    return { nodes: [], edges: [] };
+    throw new Error('Stored workflow definition is corrupted');
   }
 }
 
@@ -79,6 +79,10 @@ workflowsRouter.post('/', async (req, res, next) => {
     const user = req.user;
     if (!user) return res.status(401).json({ success: false, message: 'Authentication required' });
     const data = workflowInputSchema.parse(req.body);
+    if (data.status === 'ACTIVE') {
+      const validation = validateDefinition(data.definitionJson);
+      if (!validation.valid) return res.status(400).json({ success: false, message: 'Workflow is not valid', errors: validation.errors });
+    }
     const workspaceId = await userWorkspaceId(user.id);
     const serialized = JSON.stringify(data.definitionJson);
     const workflow = await prisma.$transaction(async (transaction) => {
@@ -125,6 +129,11 @@ workflowsRouter.patch('/:id', async (req, res, next) => {
     const workflow = await findAccessibleWorkflow(req.params.id, user.id);
     if (!workflow) return res.status(404).json({ success: false, message: 'Workflow not found' });
     const data = workflowInputSchema.partial().parse(req.body);
+    const nextDefinition = data.definitionJson ?? parseStoredDefinition(workflow.definitionJson);
+    if ((data.status ?? workflow.status) === 'ACTIVE') {
+      const validation = validateDefinition(nextDefinition);
+      if (!validation.valid) return res.status(400).json({ success: false, message: 'Workflow is not valid', errors: validation.errors });
+    }
     const definition = data.definitionJson === undefined ? undefined : JSON.stringify(data.definitionJson);
     const updated = await prisma.$transaction(async (transaction) => {
       const saved = await transaction.workflow.update({
@@ -229,6 +238,8 @@ workflowsRouter.post('/:id/runs', async (req, res, next) => {
     if (!workflow) return res.status(404).json({ success: false, message: 'Workflow not found' });
     const input = z.record(z.unknown()).safeParse(req.body ?? {});
     if (!input.success) return res.status(400).json({ success: false, message: 'Run input must be an object' });
+    const validation = validateDefinition(parseStoredDefinition(workflow.definitionJson));
+    if (!validation.valid) return res.status(400).json({ success: false, message: 'Workflow is not valid', errors: validation.errors });
     const run = await executeWorkflow(workflow, user.id, input.data);
     return res.status(201).json({ success: run.status === 'SUCCESS', run });
   } catch (error) {

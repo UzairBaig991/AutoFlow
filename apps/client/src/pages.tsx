@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Activity, ArrowDownRight, ArrowUpRight, Check, Clock3, Copy, Play, Plus, Search, Settings2, Workflow as WorkflowIcon, X } from 'lucide-react';
@@ -30,7 +31,7 @@ type ExecutionAnalytics = {
   averageDurationMs: number;
 };
 
-function PageHeading({ eyebrow, title, description, actions }: { eyebrow?: string; title: string; description?: string; actions?: React.ReactNode }) {
+function PageHeading({ eyebrow, title, description, actions }: { eyebrow?: string; title: string; description?: string; actions?: ReactNode }) {
   return <div className="page-heading"><div>{eyebrow && <div className="page-eyebrow">{eyebrow}</div>}<h1>{title}</h1>{description && <p>{description}</p>}</div>{actions && <div className="page-actions">{actions}</div>}</div>;
 }
 
@@ -38,7 +39,7 @@ function ErrorState({ message }: { message: string }) {
   return <div className="error-state" role="alert"><div className="error-icon"><X size={18} /></div><div><strong>Couldn’t load this data</strong><p>{message}</p></div></div>;
 }
 
-function EmptyState({ title, message, action }: { title: string; message: string; action?: React.ReactNode }) {
+function EmptyState({ title, message, action }: { title: string; message: string; action?: ReactNode }) {
   return <div className="empty-state"><div className="empty-icon"><WorkflowIcon size={22} /></div><h3>{title}</h3><p>{message}</p>{action}</div>;
 }
 
