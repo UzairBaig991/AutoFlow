@@ -19,7 +19,15 @@ npm --prefix apps/client install
 npm --prefix server install
 ```
 
-### 2. Start local services
+### 2. Apply database migrations
+
+```bash
+cd server
+npx prisma migrate dev
+cd ..
+```
+
+### 3. Start local services
 
 ```bash
 npm run dev
@@ -31,7 +39,7 @@ Open the frontend and register a new account. Registration creates a local works
 
 ## Backend notes
 
-The backend uses SQLite for a self-contained local setup. The database includes users, revocable sessions, external identity accounts, workspaces, expiring invitations, workflow versions/runs/logs, tasks, notifications, and audit records. Copy `server/.env.example` to `server/.env` and run:
+The backend uses SQLite for a self-contained local setup. The database includes users, revocable sessions, external identity accounts, workspaces, expiring invitations, workflow versions/runs/logs, tasks, notifications, and audit records. Copy `server/.env.example` to `server/.env` before migrating if you need to customize the local database path or OAuth settings.
 
 ```bash
 cd server

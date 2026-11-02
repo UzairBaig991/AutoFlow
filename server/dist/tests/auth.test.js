@@ -14,12 +14,18 @@ describe('Auth API', () => {
             .post('/api/auth/register')
             .send({
             name: 'Demo User',
-            email,
+            email: email.toUpperCase(),
             password: 'StrongPass123',
         });
         expect(response.status).toBe(201);
         expect(response.body.success).toBe(true);
         expect(response.body.user.email).toBe(email);
+    });
+    it('reports which optional OAuth providers are configured', async () => {
+        const response = await request(app).get('/api/auth/providers');
+        expect(response.status).toBe(200);
+        expect(typeof response.body.providers.google).toBe('boolean');
+        expect(typeof response.body.providers.github).toBe('boolean');
     });
     it('rejects weak passwords and cross-origin signup requests', async () => {
         const weakPassword = await request(app)
@@ -59,7 +65,9 @@ describe('Auth API', () => {
         const invitation = await owner.post('/api/auth/invitations').send({ email: inviteeEmail });
         expect(invitation.status).toBe(201);
         const token = new URL(invitation.body.invitation.url).pathname.split('/').at(-1);
-        expect(token).toBeTruthy();
+        if (!token)
+            throw new Error('Invitation URL did not contain a token');
+        expect(await prisma.workspaceInvitation.findUnique({ where: { tokenHash: token } })).toBeNull();
         const invitee = request.agent(app);
         const joined = await invitee.post('/api/auth/register').send({
             name: 'Invited Teammate',
@@ -72,6 +80,7 @@ describe('Auth API', () => {
         expect(await prisma.workspaceMember.findFirst({
             where: { userId: joined.body.user.id, workspace: { owner: { email: ownerEmail } } },
         })).not.toBeNull();
+        expect(await prisma.auditLog.count({ where: { actorId: joined.body.user.id, action: 'WORKSPACE_INVITATION_ACCEPTED' } })).toBe(1);
         const replay = await request(app).post('/api/auth/register').send({
             name: 'Another Teammate',
             email: `replay-${Date.now()}@example.com`,

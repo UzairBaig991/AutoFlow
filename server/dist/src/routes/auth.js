@@ -97,10 +97,25 @@ async function acceptInvitationForUser(userId, email, token) {
             update: {},
             create: { workspaceId: invitation.workspaceId, userId, role: invitation.role },
         });
+        await transaction.auditLog.create({
+            data: {
+                workspaceId: invitation.workspaceId,
+                actorId: userId,
+                action: 'WORKSPACE_INVITATION_ACCEPTED',
+                resourceType: 'WorkspaceInvitation',
+                resourceId: invitation.id,
+                metadata: JSON.stringify({ email: normalizedEmail }),
+            },
+        });
     });
 }
 async function authenticateOAuthProfile(profile, inviteToken) {
-    const email = profile.email.toLowerCase();
+    const identity = z.object({
+        email: z.string().email().max(254),
+        name: z.string().trim().min(1).max(80),
+        providerAccountId: z.string().min(1).max(255),
+    }).parse(profile);
+    const email = identity.email.toLowerCase();
     const existingAccount = await prisma.authAccount.findUnique({
         where: { provider_providerAccountId: { provider: profile.provider, providerAccountId: profile.providerAccountId } },
         include: { user: true },
@@ -131,7 +146,7 @@ async function authenticateOAuthProfile(profile, inviteToken) {
             }
             const user = linkedAccount?.user ?? await transaction.user.findUnique({ where: { email } }) ??
                 await transaction.user.create({
-                    data: { name: profile.name, email, passwordHash: null, role: 'MEMBER' },
+                    data: { name: identity.name, email, passwordHash: null, role: 'MEMBER' },
                 });
             if (!linkedAccount) {
                 await transaction.authAccount.create({
@@ -143,6 +158,16 @@ async function authenticateOAuthProfile(profile, inviteToken) {
                 where: { workspaceId_userId: { workspaceId: invitation.workspaceId, userId: user.id } },
                 update: {},
                 create: { workspaceId: invitation.workspaceId, userId: user.id, role: invitation.role },
+            });
+            await transaction.auditLog.create({
+                data: {
+                    workspaceId: invitation.workspaceId,
+                    actorId: user.id,
+                    action: 'WORKSPACE_INVITATION_ACCEPTED',
+                    resourceType: 'WorkspaceInvitation',
+                    resourceId: invitation.id,
+                    metadata: JSON.stringify({ email }),
+                },
             });
             return user;
         });
@@ -158,9 +183,9 @@ async function authenticateOAuthProfile(profile, inviteToken) {
     }
     return prisma.$transaction(async (transaction) => {
         const user = await transaction.user.create({
-            data: { name: profile.name, email, passwordHash: null, role: 'OWNER' },
+            data: { name: identity.name, email, passwordHash: null, role: 'OWNER' },
         });
-        await transaction.workspace.create({ data: { name: `${profile.name}'s Workspace`, ownerId: user.id } });
+        await transaction.workspace.create({ data: { name: `${identity.name}'s Workspace`, ownerId: user.id } });
         await transaction.authAccount.create({
             data: { userId: user.id, provider: profile.provider, providerAccountId: profile.providerAccountId },
         });
@@ -191,7 +216,12 @@ async function getGoogleProfile(code, config) {
     if (!profile.sub || !profile.email || profile.email_verified !== true) {
         throw new Error('Google account must have a verified email address');
     }
-    return { provider: 'google', providerAccountId: profile.sub, email: profile.email, name: profile.name || profile.email };
+    return {
+        provider: 'google',
+        providerAccountId: profile.sub,
+        email: profile.email,
+        name: profile.name || profile.email.split('@')[0] || profile.email,
+    };
 }
 async function getGitHubProfile(code, config) {
     const token = await fetchJson('https://github.com/login/oauth/access_token', {
@@ -221,16 +251,6 @@ async function getGitHubProfile(code, config) {
         name: profile.name || profile.login || verifiedEmail,
     };
 }
-authRouter.use((req, res, next) => {
-    if (['GET', 'HEAD', 'OPTIONS'].includes(req.method))
-        return next();
-    const origin = req.get('origin');
-    const clientOrigin = new URL(process.env.CLIENT_URL ?? 'http://localhost:5173').origin;
-    if (origin && origin !== clientOrigin) {
-        return res.status(403).json({ success: false, message: 'Request origin is not allowed' });
-    }
-    return next();
-});
 authRouter.get('/providers', (_req, res) => {
     return res.json({
         success: true,
@@ -264,6 +284,16 @@ authRouter.post('/register', async (req, res, next) => {
             if (invitation) {
                 await transaction.workspaceMember.create({
                     data: { workspaceId: invitation.workspaceId, userId: createdUser.id, role: invitation.role },
+                });
+                await transaction.auditLog.create({
+                    data: {
+                        workspaceId: invitation.workspaceId,
+                        actorId: createdUser.id,
+                        action: 'WORKSPACE_INVITATION_ACCEPTED',
+                        resourceType: 'WorkspaceInvitation',
+                        resourceId: invitation.id,
+                        metadata: JSON.stringify({ email }),
+                    },
                 });
             }
             else {
@@ -337,20 +367,33 @@ authRouter.post('/invitations', requireAuth, async (req, res, next) => {
         });
         if (!workspace)
             return res.status(404).json({ success: false, message: 'Owned workspace not found' });
-        await prisma.workspaceInvitation.updateMany({
-            where: { workspaceId: workspace.id, email, acceptedAt: null },
-            data: { expiresAt: new Date() },
-        });
         const token = randomBytes(32).toString('base64url');
-        const invitation = await prisma.workspaceInvitation.create({
-            data: {
-                workspaceId: workspace.id,
-                invitedById: user.id,
-                email,
-                tokenHash: invitationTokenHash(token),
-                expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-            },
-            select: { expiresAt: true },
+        const invitation = await prisma.$transaction(async (transaction) => {
+            await transaction.workspaceInvitation.updateMany({
+                where: { workspaceId: workspace.id, email, acceptedAt: null },
+                data: { expiresAt: new Date() },
+            });
+            const createdInvitation = await transaction.workspaceInvitation.create({
+                data: {
+                    workspaceId: workspace.id,
+                    invitedById: user.id,
+                    email,
+                    tokenHash: invitationTokenHash(token),
+                    expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+                },
+                select: { id: true, expiresAt: true },
+            });
+            await transaction.auditLog.create({
+                data: {
+                    workspaceId: workspace.id,
+                    actorId: user.id,
+                    action: 'WORKSPACE_INVITATION_CREATED',
+                    resourceType: 'WorkspaceInvitation',
+                    resourceId: createdInvitation.id,
+                    metadata: JSON.stringify({ email }),
+                },
+            });
+            return createdInvitation;
         });
         return res.status(201).json({
             success: true,
@@ -390,7 +433,14 @@ authRouter.get('/oauth/:provider', (req, res) => {
     const config = getProviderConfig(providerName);
     if (!config)
         return res.status(503).json({ success: false, message: `${providerName} sign-in is not configured` });
-    const inviteToken = typeof req.query.inviteToken === 'string' ? req.query.inviteToken : undefined;
+    const rawInviteToken = typeof req.query.inviteToken === 'string' ? req.query.inviteToken : undefined;
+    const parsedInviteToken = rawInviteToken === undefined
+        ? undefined
+        : z.string().min(32).max(256).safeParse(rawInviteToken);
+    if (parsedInviteToken && !parsedInviteToken.success) {
+        return res.status(400).json({ success: false, message: 'Invitation token is invalid' });
+    }
+    const inviteToken = parsedInviteToken?.success ? parsedInviteToken.data : undefined;
     const state = randomBytes(32).toString('base64url');
     res.cookie(stateCookieName(providerName), JSON.stringify({ state, inviteToken }), stateCookieOptions(providerName));
     const authorizationUrl = new URL(providerName === 'google' ? 'https://accounts.google.com/o/oauth2/v2/auth' : 'https://github.com/login/oauth/authorize');

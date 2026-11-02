@@ -319,6 +319,16 @@ authRouter.post('/register', async (req, res, next) => {
         await transaction.workspaceMember.create({
           data: { workspaceId: invitation.workspaceId, userId: createdUser.id, role: invitation.role },
         });
+        await transaction.auditLog.create({
+          data: {
+            workspaceId: invitation.workspaceId,
+            actorId: createdUser.id,
+            action: 'WORKSPACE_INVITATION_ACCEPTED',
+            resourceType: 'WorkspaceInvitation',
+            resourceId: invitation.id,
+            metadata: JSON.stringify({ email }),
+          },
+        });
       } else {
         await transaction.workspace.create({
           data: { name: `${data.name}'s Workspace`, ownerId: createdUser.id },
@@ -407,7 +417,7 @@ authRouter.post('/invitations', requireAuth, async (req, res, next) => {
           tokenHash: invitationTokenHash(token),
           expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
         },
-        select: { expiresAt: true },
+        select: { id: true, expiresAt: true },
       });
       await transaction.auditLog.create({
         data: {
