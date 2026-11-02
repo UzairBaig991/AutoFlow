@@ -1,5 +1,5 @@
 import { lazy, Suspense, useState } from 'react';
-import { BrowserRouter, Link, Navigate, Outlet, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Link, Navigate, Outlet, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { QueryClient, QueryClientProvider, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Activity, BarChart3, Bell, ChevronDown, CircleHelp, LayoutDashboard, LogOut, Menu, Moon, Plus, Settings2, Sun, Workflow as WorkflowIcon } from 'lucide-react';
 import { apiRequest, getCurrentUser, type User } from './api';
@@ -89,16 +89,33 @@ function LandingPage() {
   );
 }
 
-function AuthPage({ mode }: { mode: 'login' | 'register' }) {
+function AuthPage({ mode, inviteToken }: { mode: 'login' | 'register'; inviteToken?: string }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [searchParams] = useSearchParams();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const providersQuery = useQuery({
+    queryKey: ['auth-providers'],
+    queryFn: () => apiRequest<{ providers: { google: boolean; github: boolean } }>('/api/auth/providers'),
+  });
+  const oauthError = searchParams.get('error');
+  const authErrorMessage = oauthError === 'oauth_cancelled'
+    ? 'Sign-in was cancelled.'
+    : oauthError === 'oauth_state'
+      ? 'The sign-in request expired. Please try again.'
+      : oauthError === 'invitation_invalid'
+        ? 'This invitation is no longer valid. Ask the workspace owner for a new link.'
+        : oauthError
+          ? 'Social sign-in could not be completed. Please try again.'
+          : null;
   const mutation = useMutation({
     mutationFn: () => apiRequest<{ user: User }>(`/api/auth/${mode}`, {
       method: 'POST',
-      body: JSON.stringify(mode === 'register' ? { name, email, password } : { email, password }),
+      body: JSON.stringify(mode === 'register'
+        ? { name, email, password, ...(inviteToken ? { inviteToken } : {}) }
+        : { email, password }),
     }),
     onSuccess: ({ user }) => {
       queryClient.setQueryData(['me'], user);
@@ -110,17 +127,59 @@ function AuthPage({ mode }: { mode: 'login' | 'register' }) {
     <main className="auth-page">
       <section className="auth-card">
         <Brand />
-        <span className="eyebrow">{mode === 'login' ? 'Welcome back' : 'Get started'}</span>
-        <h1>{mode === 'login' ? 'Sign in to AutoFlow' : 'Create your account'}</h1>
-        <p className="muted-copy">{mode === 'login' ? 'Continue to your workspace and workflows.' : 'Your workspace will be created automatically.'}</p>
+        <span className="eyebrow">{inviteToken ? 'Workspace invitation' : mode === 'login' ? 'Welcome back' : 'Get started'}</span>
+        <h1>{inviteToken ? 'Join your workspace' : mode === 'login' ? 'Sign in to AutoFlow' : 'Create your account'}</h1>
+        <p className="muted-copy">{inviteToken ? 'Create an account with the invited email address to join this team.' : mode === 'login' ? 'Continue to your workspace and workflows.' : 'Your workspace will be created automatically.'}</p>
+        {authErrorMessage && <div className="inline-error" role="alert">{authErrorMessage}</div>}
+        {providersQuery.data && (providersQuery.data.providers.google || providersQuery.data.providers.github) && (
+          <div className="oauth-options">
+            {providersQuery.data.providers.google && <a className="oauth-btn" href={`/api/auth/oauth/google${inviteToken ? `?inviteToken=${encodeURIComponent(inviteToken)}` : ''}`}>Continue with Google</a>}
+            {providersQuery.data.providers.github && <a className="oauth-btn" href={`/api/auth/oauth/github${inviteToken ? `?inviteToken=${encodeURIComponent(inviteToken)}` : ''}`}>Continue with GitHub</a>}
+            <div className="auth-divider"><span>or use email</span></div>
+          </div>
+        )}
         <form onSubmit={(event) => { event.preventDefault(); mutation.mutate(); }} className="auth-form">
           {mode === 'register' && <label>Your name<input autoComplete="name" required minLength={2} value={name} onChange={(event) => setName(event.target.value)} /></label>}
           <label>Email address<input type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)} /></label>
-          <label>Password<input type="password" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} required minLength={8} value={password} onChange={(event) => setPassword(event.target.value)} /></label>
+          <label>Password<input type="password" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} required minLength={mode === 'login' ? 1 : 12} maxLength={128} value={password} onChange={(event) => setPassword(event.target.value)} />{mode === 'register' && <small className="field-hint">Use at least 12 characters. A longer passphrase is recommended.</small>}</label>
           {mutation.error && <div className="inline-error" role="alert">{mutation.error.message}</div>}
-          <button className="primary-btn full-width" type="submit" disabled={mutation.isPending}>{mutation.isPending ? 'Please wait…' : mode === 'login' ? 'Sign in' : 'Create account'}</button>
+          <button className="primary-btn full-width" type="submit" disabled={mutation.isPending}>{mutation.isPending ? 'Please wait…' : inviteToken ? 'Join workspace' : mode === 'login' ? 'Sign in' : 'Create account'}</button>
         </form>
-        <p className="auth-switch">{mode === 'login' ? 'New to AutoFlow?' : 'Already have an account?'} <Link to={mode === 'login' ? '/register' : '/login'}>{mode === 'login' ? 'Create account' : 'Sign in'}</Link></p>
+        <p className="auth-switch">{mode === 'login' ? 'New to AutoFlow?' : 'Already have an account?'} <Link to={mode === 'login' ? (inviteToken ? `/invite/${inviteToken}` : '/register') : '/login'}>{mode === 'login' ? 'Create account' : 'Sign in'}</Link></p>
+      </section>
+    </main>
+  );
+}
+
+function InvitePage({ user }: { user?: User }) {
+  const { token = '' } = useParams();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const acceptInvitation = useMutation({
+    mutationFn: () => apiRequest('/api/auth/invitations/accept', {
+      method: 'POST',
+      body: JSON.stringify({ token }),
+    }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['me'] });
+      navigate('/app');
+    },
+  });
+
+  if (!user) return <AuthPage mode="register" inviteToken={token} />;
+
+  return (
+    <main className="auth-page">
+      <section className="auth-card">
+        <Brand />
+        <span className="eyebrow">Workspace invitation</span>
+        <h1>Join your workspace</h1>
+        <p className="muted-copy">Accept this invitation while signed in as <strong>{user.email}</strong>.</p>
+        {acceptInvitation.error && <div className="inline-error" role="alert">{acceptInvitation.error.message}</div>}
+        <button className="primary-btn full-width" type="button" onClick={() => acceptInvitation.mutate()} disabled={acceptInvitation.isPending}>
+          {acceptInvitation.isPending ? 'Joining…' : 'Accept invitation'}
+        </button>
+        <p className="auth-switch"><Link to="/app">Go back to AutoFlow</Link></p>
       </section>
     </main>
   );
@@ -196,6 +255,7 @@ function AppRoutes() {
       <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={user ? <Navigate to="/app" replace /> : <AuthPage mode="login" />} />
       <Route path="/register" element={user ? <Navigate to="/app" replace /> : <AuthPage mode="register" />} />
+      <Route path="/invite/:token" element={<InvitePage user={user} />} />
       <Route path="/app" element={user && !isError ? <AppLayout user={user} /> : <Navigate to="/login" replace />}>
         <Route index element={<Suspense fallback={<div className="loading-inline">Loading workspace…</div>}><DashboardPage /></Suspense>} />
         <Route path="workflows" element={<Suspense fallback={<div className="loading-inline">Loading workflows…</div>}><WorkflowsPage /></Suspense>} />

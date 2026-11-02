@@ -151,8 +151,14 @@
 .auth-card .brand-row { margin-bottom: 35px; }
 .auth-card h1 { margin: 10px 0 7px; color: #202a3b; font-size: 25px; letter-spacing: -.8px; }
 .auth-card .muted-copy { color: #8390a3; font-size: 12px; }
+.oauth-options { display: grid; gap: 9px; margin-top: 21px; }
+.oauth-btn { min-height: 40px; display: flex; align-items: center; justify-content: center; border: 1px solid #dfe4ec; border-radius: 8px; color: #354156; background: #fff; font-size: 12px; font-weight: 650; text-decoration: none; }
+.oauth-btn:hover { background: #f7f8fc; border-color: #cbd2df; }
+.auth-divider { display: flex; align-items: center; gap: 12px; margin-top: 5px; color: #9aa4b4; font-size: 10px; }
+.auth-divider::before, .auth-divider::after { content: ""; height: 1px; flex: 1; background: #e8ebf2; }
 .auth-form { display: grid; gap: 16px; margin-top: 25px; }
 .auth-form label, .field-label { display: grid; gap: 7px; color: #4c586c; font-size: 11px; font-weight: 650; }
+.field-hint { color: #8591a4; font-size: 10px; font-weight: 400; }
 .auth-form input, .field-label input, .field-label textarea, .field-label select { width: 100%; min-height: 40px; padding: 9px 11px; border: 1px solid #dfe4ec; border-radius: 8px; outline: none; background: #fff; color: #2a3548; font: inherit; font-size: 12px; box-sizing: border-box; }
 .auth-form input:focus, .field-label input:focus, .field-label textarea:focus, .field-label select:focus { border-color: #8374e3; box-shadow: 0 0 0 3px #8979e51c; }
 .full-width { width: 100%; min-height: 42px; margin-top: 4px; }
@@ -238,6 +244,13 @@
 .panel-heading h2 { margin: 0 0 4px; color: var(--text); font-size: 13px; font-weight: 700; letter-spacing: -.2px; }
 .panel-heading p { margin: 0; color: var(--muted); font-size: 10px; }
 .panel-heading > a { color: #6656cb; text-decoration: none; font-size: 10px; font-weight: 650; white-space: nowrap; }
+.invite-panel { margin-bottom: 18px; }
+.invite-form { display: flex; align-items: end; gap: 12px; }
+.invite-form .field-label { flex: 1; }
+.invite-feedback { margin-top: 12px; }
+.invite-result { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 14px; }
+.invite-link { min-width: 0; overflow-wrap: anywhere; color: var(--muted); font-size: 11px; }
+.invite-result small { width: 100%; color: var(--muted); font-size: 10px; }
 .chart-panel { min-height: 300px; }
 .chart-wrap { height: 220px; width: 100%; }
 .status-panel { min-height: 300px; }
@@ -389,7 +402,7 @@
 @media (max-width: 520px) {
   .landing-header { padding: 13px 15px; }.landing-header .actions { gap: 6px; }.landing-header .primary-btn, .landing-header .secondary-btn { min-height: 35px; padding: 0 9px; font-size: 10px; }
   .hero-section { padding: 35px 16px 20px; }.hero-copy h1 { letter-spacing: -2px; }.hero-stats { gap: 17px; }.hero-stats span { max-width: 88px; line-height: 1.4; }
-  .demo-flow { min-height: 350px; padding: 24px 12px; }.demo-node { min-width: 150px; padding: 12px; }.demo-node.action { min-width: 115px; font-size: 10px; }.demo-branches { gap: 7px; }
+  .demo-flow { min-height: 350px; padding: 24px 12px; }.demo-node { min-width: 150px; padding: 12px; }.demo-node.action { min-width: 115px; font-size: 10px; }.demo-branches { gap: 7px; }.invite-form { align-items: stretch; flex-direction: column; }.invite-form .primary-btn { width: 100%; }
   .landing-footer { align-items: flex-start; flex-direction: column; gap: 10px; }.auth-card { padding: 25px 20px; }
   .page-heading { align-items: flex-start; flex-direction: column; }.page-heading h1 { font-size: 22px; }.page-actions { width: 100%; }.page-actions .primary-btn { width: 100%; }
   .metric-grid, .analytics-metrics { gap: 9px; }.metric-card { min-height: 128px; padding: 13px; }.metric-value { font-size: 22px; }.admin-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }

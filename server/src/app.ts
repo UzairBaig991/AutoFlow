@@ -11,6 +11,13 @@ import { runsRouter } from './routes/runs.js';
 import { prisma } from './lib/prisma.js';
 
 const app = express();
+const authRateLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many authentication attempts. Please try again later.' },
+});
 
 app.use(helmet({
   contentSecurityPolicy: false,
@@ -21,6 +28,15 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '1mb' }));
 app.use(cookieParser());
+app.use((req, res, next) => {
+  if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
+  const origin = req.get('origin');
+  const clientOrigin = new URL(process.env.CLIENT_URL ?? 'http://localhost:5173').origin;
+  if (origin && origin !== clientOrigin) {
+    return res.status(403).json({ success: false, message: 'Request origin is not allowed' });
+  }
+  return next();
+});
 app.use(rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 200,
@@ -28,6 +44,8 @@ app.use(rateLimit({
   legacyHeaders: false,
   message: { success: false, message: 'Too many requests. Please try again later.' },
 }));
+
+app.use('/api/auth', authRateLimit);
 
 app.get('/api/health', async (_req, res) => {
   try {

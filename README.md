@@ -31,14 +31,20 @@ Open the frontend and register a new account. Registration creates a local works
 
 ## Backend notes
 
-The backend uses a local SQLite database for a self-contained development setup. Copy `server/.env.example` to `server/.env` if needed, set a private `JWT_SECRET`, and run:
+The backend uses SQLite for a self-contained local setup. The database includes users, revocable sessions, external identity accounts, workspaces, expiring invitations, workflow versions/runs/logs, tasks, notifications, and audit records. Copy `server/.env.example` to `server/.env` and run:
 
 ```bash
 cd server
 npx prisma migrate dev
 ```
 
-The schema stores JSON-shaped workflow definitions and execution data as serialized strings because the selected SQLite connector does not support Prisma JSON fields. Production use should move to PostgreSQL and use a production-grade secret/session configuration.
+Set a unique `JWT_SECRET` of at least 32 characters before production use. Sessions are stored in the database and revoked on logout; passwords require at least 12 characters and are hashed with bcrypt. Authentication endpoints have a dedicated rate limit and unsafe browser requests are checked against the configured client origin.
+
+Email/password signup works out of the box. Google and GitHub sign-in appear after their client ID and secret are configured. Add the exact callback URLs `http://localhost:4000/api/auth/oauth/google/callback` and/or `http://localhost:4000/api/auth/oauth/github/callback` to the corresponding provider console, then set the matching `*_CLIENT_ID` and `*_CLIENT_SECRET` values and `SERVER_URL`. Only providers with both credentials are enabled. OAuth signup requires a verified provider email.
+
+Workspace owners can create single-use, seven-day invitation links under **Tasks & administration**. New users must register with the invited email; existing users can sign in and accept the invitation from its link. Invitation tokens are stored as hashes.
+
+The schema stores JSON-shaped workflow definitions and execution data as serialized strings because the selected SQLite connector does not support Prisma JSON fields. For production deployment, use PostgreSQL, secure provider credentials, HTTPS, and a production-grade secret/session configuration.
 
 ## Useful commands
 

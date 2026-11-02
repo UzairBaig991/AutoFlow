@@ -1,4 +1,4 @@
-import jwt from 'jsonwebtoken';
+import jwt, { type JwtPayload } from 'jsonwebtoken';
 import { z } from 'zod';
 import type { Request, Response, NextFunction } from 'express';
 import { prisma } from './prisma.js';
@@ -17,56 +17,101 @@ declare global {
 }
 
 export const authCookieName = 'autoflow_session';
+export const sessionLifetimeMs = 1000 * 60 * 60 * 24 * 7;
 
 function getJwtSecret() {
   const secret = process.env.JWT_SECRET;
-  if (process.env.NODE_ENV === 'production' && (!secret || secret === 'change-me-in-production')) {
-    throw new Error('A production JWT_SECRET must be configured');
+  if (process.env.NODE_ENV === 'production' && (!secret || secret.length < 32 || /^(change-me|replace-with|your[-_])/i.test(secret))) {
+    throw new Error('A private JWT_SECRET of at least 32 characters must be configured in production');
   }
   return secret ?? 'development-secret';
 }
 
+const passwordSchema = z.string()
+  .min(12, 'Password must be at least 12 characters')
+  .max(128, 'Password must be at most 128 characters')
+  .refine((password) => Buffer.byteLength(password, 'utf8') <= 72, 'Password must not exceed 72 UTF-8 bytes');
+
 export const registerSchema = z.object({
-  name: z.string().min(2).max(80),
-  email: z.string().email(),
-  password: z.string().min(8).max(128),
+  name: z.string().trim().min(2).max(80),
+  email: z.string().trim().email().max(254),
+  password: passwordSchema,
+  inviteToken: z.string().min(32).max(256).optional(),
 });
 
 export const loginSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(8).max(128),
+  email: z.string().trim().email().max(254),
+  password: z.string().min(1).max(128)
+    .refine((password) => Buffer.byteLength(password, 'utf8') <= 72, 'Password is too long'),
 });
 
-export function signToken(userId: string) {
-  return jwt.sign({ sub: userId }, getJwtSecret(), { expiresIn: '7d' });
+export function signToken(userId: string, sessionId: string) {
+  return jwt.sign({ sub: userId, sid: sessionId }, getJwtSecret(), { expiresIn: '7d' });
 }
+
+const authCookieOptions = {
+  httpOnly: true,
+  sameSite: 'lax' as const,
+  secure: process.env.NODE_ENV === 'production',
+  path: '/',
+};
 
 export function setAuthCookie(res: Response, token: string) {
-  res.cookie(authCookieName, token, {
-    httpOnly: true,
-    sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
-    maxAge: 1000 * 60 * 60 * 24 * 7,
-  });
+  res.cookie(authCookieName, token, { ...authCookieOptions, maxAge: sessionLifetimeMs });
 }
 
-export async function getAuthenticatedUser(req: Request) {
-  const token = req.cookies?.[authCookieName] ?? null;
-  if (!token) return null;
+export function clearAuthCookie(res: Response) {
+  res.clearCookie(authCookieName, authCookieOptions);
+}
 
-  let userId: string;
-  const secret = getJwtSecret();
+export async function createAuthSession(userId: string) {
+  const expiresAt = new Date(Date.now() + sessionLifetimeMs);
+  const session = await prisma.authSession.create({
+    data: { userId, expiresAt },
+    select: { id: true },
+  });
+  return signToken(userId, session.id);
+}
+
+function getSessionClaims(token: string) {
   try {
-    const payload = jwt.verify(token, secret) as { sub: string };
-    if (typeof payload.sub !== 'string') return null;
-    userId = payload.sub;
+    const payload = jwt.verify(token, getJwtSecret(), { algorithms: ['HS256'] });
+    if (typeof payload === 'string') return null;
+    const claims = payload as JwtPayload;
+    if (typeof claims.sub !== 'string' || typeof claims.sid !== 'string') return null;
+    return { userId: claims.sub, sessionId: claims.sid };
   } catch {
     return null;
   }
+}
 
-  return prisma.user.findUnique({
-    where: { id: userId },
-    select: { id: true, name: true, email: true, role: true },
+export async function getAuthenticatedUser(req: Request) {
+  const token = req.cookies?.[authCookieName] as string | undefined;
+  if (!token) return null;
+  const claims = getSessionClaims(token);
+  if (!claims) return null;
+
+  const session = await prisma.authSession.findFirst({
+    where: {
+      id: claims.sessionId,
+      userId: claims.userId,
+      revokedAt: null,
+      expiresAt: { gt: new Date() },
+    },
+    select: { user: { select: { id: true, name: true, email: true, role: true } } },
+  });
+  return session?.user ?? null;
+}
+
+export async function revokeCurrentSession(req: Request) {
+  const token = req.cookies?.[authCookieName] as string | undefined;
+  if (!token) return;
+  const claims = getSessionClaims(token);
+  if (!claims) return;
+
+  await prisma.authSession.updateMany({
+    where: { id: claims.sessionId, userId: claims.userId, revokedAt: null },
+    data: { revokedAt: new Date() },
   });
 }
 

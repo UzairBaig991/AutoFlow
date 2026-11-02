@@ -8,37 +8,82 @@ datasource db {
 }
 
 model User {
-  id            String            @id @default(cuid())
-  name          String
-  email         String            @unique
-  passwordHash  String
-  role          String            @default("OWNER")
-  createdAt     DateTime          @default(now())
-  updatedAt     DateTime          @updatedAt
-  workflows     Workflow[]
-  runs          WorkflowRun[]
-  tasks         Task[]
-  notifications Notification[]
-  auditLogs     AuditLog[]
-  workspaces    Workspace[]
-  memberships   WorkspaceMember[]
+  id              String                @id @default(cuid())
+  name            String
+  email           String                @unique
+  passwordHash    String?
+  role            String                @default("OWNER")
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+  workflows       Workflow[]
+  runs            WorkflowRun[]
+  tasks           Task[]
+  notifications   Notification[]
+  auditLogs       AuditLog[]
+  workspaces      Workspace[]
+  memberships     WorkspaceMember[]
+  authAccounts    AuthAccount[]
+  sessions        AuthSession[]
+  sentInvitations WorkspaceInvitation[]
 
   @@index([email])
 }
 
+model AuthAccount {
+  id                String   @id @default(cuid())
+  userId            String
+  provider          String
+  providerAccountId String
+  createdAt         DateTime @default(now())
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model AuthSession {
+  id        String    @id @default(cuid())
+  userId    String
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@index([expiresAt])
+}
+
 model Workspace {
-  id            String            @id @default(cuid())
+  id            String                @id @default(cuid())
   name          String
   ownerId       String
-  createdAt     DateTime          @default(now())
-  updatedAt     DateTime          @updatedAt
-  owner         User              @relation(fields: [ownerId], references: [id])
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+  owner         User                  @relation(fields: [ownerId], references: [id])
   workflows     Workflow[]
   members       WorkspaceMember[]
   notifications Notification[]
   auditLogs     AuditLog[]
+  invitations   WorkspaceInvitation[]
 
   @@index([ownerId])
+}
+
+model WorkspaceInvitation {
+  id          String    @id @default(cuid())
+  workspaceId String
+  invitedById String
+  email       String
+  tokenHash   String    @unique
+  role        String    @default("MEMBER")
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  invitedBy   User      @relation(fields: [invitedById], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, email, acceptedAt])
+  @@index([expiresAt])
 }
 
 model WorkspaceMember {
@@ -88,19 +133,19 @@ model WorkflowVersion {
 }
 
 model WorkflowRun {
-  id            String        @id @default(cuid())
-  workflowId     String
+  id            String         @id @default(cuid())
+  workflowId    String
   versionId     String?
   triggeredById String?
-  triggerType   String        @default("MANUAL")
-  status        String        @default("QUEUED")
+  triggerType   String         @default("MANUAL")
+  status        String         @default("QUEUED")
   inputData     String?
   outputData    String?
   errorMessage  String?
-  startedAt     DateTime      @default(now())
+  startedAt     DateTime       @default(now())
   finishedAt    DateTime?
-  workflow      Workflow      @relation(fields: [workflowId], references: [id], onDelete: Cascade)
-  triggeredBy   User?         @relation(fields: [triggeredById], references: [id])
+  workflow      Workflow       @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  triggeredBy   User?          @relation(fields: [triggeredById], references: [id])
   logs          ExecutionLog[]
   tasks         Task[]
 
@@ -127,17 +172,17 @@ model ExecutionLog {
 }
 
 model Task {
-  id          String    @id @default(cuid())
-  workspaceId String
-  runId       String?
-  title       String
-  description String
+  id           String       @id @default(cuid())
+  workspaceId  String
+  runId        String?
+  title        String
+  description  String
   assignedToId String?
-  status      String    @default("OPEN")
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  assignedTo  User?     @relation(fields: [assignedToId], references: [id])
-  workflowRun WorkflowRun? @relation(fields: [runId], references: [id])
+  status       String       @default("OPEN")
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  assignedTo   User?        @relation(fields: [assignedToId], references: [id])
+  workflowRun  WorkflowRun? @relation(fields: [runId], references: [id])
 
   @@index([workspaceId])
   @@index([status])
@@ -153,20 +198,20 @@ model Notification {
   isRead      Boolean   @default(false)
   createdAt   DateTime  @default(now())
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  workspace   Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([workspaceId])
 }
 
 model WebhookEndpoint {
-  id          String    @id @default(cuid())
-  workflowId  String
-  tokenHash   String
-  isActive    Boolean   @default(true)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  workflow    Workflow  @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  id         String   @id @default(cuid())
+  workflowId String
+  tokenHash  String
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  workflow   Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
 
   @@index([workflowId])
 }

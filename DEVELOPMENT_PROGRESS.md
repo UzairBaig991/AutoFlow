@@ -16,16 +16,21 @@
 - Added database-backed workflow engine with graph validation, cycle detection, condition branching, bounded execution, task and notification actions, and per-node logs.
 - Added workspace-scoped workflow/run/task/notification/analytics API endpoints and workflow version records.
 - Added a Vite `/api` development proxy and root `.env`/database ignore rules.
+- Added email/password registration with a 12-character minimum, revocable database-backed sessions, auth rate limiting, and browser-origin checks.
+- Added optional Google/GitHub OAuth with verified-email checks, provider identity records, OAuth state validation, and environment-based provider configuration.
+- Added hashed, expiring, single-use workspace invitations with owner UI and invite-based registration/acceptance.
+- Added transactional audit records for invitation creation and acceptance without storing raw invite tokens.
+- Expanded the SQLite schema with OAuth account, session, and workspace invitation tables and supporting indexes.
 
 ## Validation
 
 - Frontend production build: passed.
 - Backend TypeScript build: passed.
-- Backend tests: 4 passed, including both conditional branches, persisted task/notification records, authentication, health, and cycle rejection.
+- Backend tests cover authentication, session revocation, signup validation, invitation acceptance, workflow branches, persisted task/notification records, health, and cycle rejection.
 - Browser verification: registration, creating/running the sample workflow, workflow reload/validation, execution history, and generated task/notification views passed.
 
 ## Known notes
 
 - Prisma required SQLite-compatible schema adjustments because JSON and enum fields are not supported by SQLite.
 - The project is designed for local development and uses SQLite instead of PostgreSQL to keep the environment self-contained.
-- Webhook/schedule triggers, durable background delays, CSRF protection, realtime Socket.IO updates, role editing, and production PostgreSQL setup remain unimplemented.
+- Webhook/schedule triggers, durable background delays, synchronizer-token CSRF protection, realtime Socket.IO updates, role editing, password recovery/email verification, and production PostgreSQL setup remain unimplemented. Browser-origin checks and SameSite cookies are enabled; production OAuth also requires provider credentials and registered callback URLs.

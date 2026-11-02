@@ -10,6 +10,13 @@ import { adminRouter, notificationsRouter, tasksRouter } from './routes/activity
 import { runsRouter } from './routes/runs.js';
 import { prisma } from './lib/prisma.js';
 const app = express();
+const authRateLimit = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 30,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { success: false, message: 'Too many authentication attempts. Please try again later.' },
+});
 app.use(helmet({
     contentSecurityPolicy: false,
 }));
@@ -26,6 +33,7 @@ app.use(rateLimit({
     legacyHeaders: false,
     message: { success: false, message: 'Too many requests. Please try again later.' },
 }));
+app.use('/api/auth', authRateLimit);
 app.get('/api/health', async (_req, res) => {
     try {
         await prisma.$queryRaw `SELECT 1`;
