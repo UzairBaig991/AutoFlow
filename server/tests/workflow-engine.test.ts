@@ -39,6 +39,7 @@ describe('Workflow engine', () => {
           { id: 'start', type: 'automation', data: { kind: 'inquiry-trigger', label: 'New inquiry', config: {} } },
           { id: 'condition', type: 'automation', data: { kind: 'condition', label: 'Sales inquiry?', config: { field: 'category', operator: 'equals', value: 'sales' } } },
           { id: 'sales', type: 'automation', data: { kind: 'create-task', label: 'Create sales task', config: { title, description: 'Call the sales lead.' } } },
+          { id: 'assign-sales', type: 'automation', data: { kind: 'assign-team', label: 'Assign sales team', config: { team: 'Sales' } } },
           { id: 'notify', type: 'automation', data: { kind: 'notification', label: 'Notify owner', config: { title: 'Sales inquiry received', message: 'A new sales follow-up is ready.' } } },
           { id: 'finish-sales', type: 'automation', data: { kind: 'end', label: 'Finish sales path', config: {} } },
           { id: 'support', type: 'automation', data: { kind: 'create-task', label: 'Create support task', config: { title: `Support follow-up ${Date.now()}`, description: '' } } },
@@ -47,7 +48,8 @@ describe('Workflow engine', () => {
           { id: 'start-condition', source: 'start', target: 'condition' },
           { id: 'condition-sales', source: 'condition', target: 'sales', sourceHandle: 'true' },
           { id: 'condition-support', source: 'condition', target: 'support', sourceHandle: 'false' },
-          { id: 'sales-notify', source: 'sales', target: 'notify' },
+          { id: 'sales-assign', source: 'sales', target: 'assign-sales' },
+          { id: 'assign-notify', source: 'assign-sales', target: 'notify' },
           { id: 'notify-end', source: 'notify', target: 'finish-sales' },
         ],
       },
@@ -57,11 +59,11 @@ describe('Workflow engine', () => {
     const run = await agent.post(`/api/workflows/${created.body.workflow.id}/runs`).send({ category: 'sales' });
     expect(run.status).toBe(201);
     expect(run.body.run.status).toBe('SUCCESS');
-    expect(run.body.run.logs.map((log: { nodeId: string }) => log.nodeId)).toEqual(['start', 'condition', 'sales', 'notify', 'finish-sales']);
+    expect(run.body.run.logs.map((log: { nodeId: string }) => log.nodeId)).toEqual(['start', 'condition', 'sales', 'assign-sales', 'notify', 'finish-sales']);
 
     const tasks = await agent.get('/api/tasks');
     expect(tasks.status).toBe(200);
-    expect(tasks.body.tasks.some((task: { title: string }) => task.title === title)).toBe(true);
+    expect(tasks.body.tasks.some((task: { title: string; assignedTeam: string | null }) => task.title === title && task.assignedTeam === 'Sales')).toBe(true);
 
     const notifications = await agent.get('/api/notifications');
     expect(notifications.status).toBe(200);

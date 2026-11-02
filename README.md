@@ -67,7 +67,7 @@ The API health check is available at `http://localhost:4000/api/health`.
 ## Implemented API areas
 
 - `/api/auth` — register, login, logout, current user
-- `/api/workflows` — create/list/update/delete, validate, publish, and run workflows
+- `/api/workflows` — create/list/update/delete/archive/restore, validate, publish, and run workflows
 - `/api/runs` — execution history, details, logs, retry
 - `/api/analytics` — real workspace metrics and execution series
 - `/api/tasks` and `/api/notifications` — generated work and in-app updates

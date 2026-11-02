@@ -21,6 +21,8 @@
 - Added hashed, expiring, single-use workspace invitations with owner UI and invite-based registration/acceptance.
 - Added transactional audit records for invitation creation and acceptance without storing raw invite tokens.
 - Expanded the SQLite schema with OAuth account, session, and workspace invitation tables and supporting indexes.
+- Wired the header notification shortcut to the notification list and added archive/restore actions for the existing workflow status filter.
+- Made the Assign Team workflow action persist on generated tasks and display the team in the task list.
 
 ## Validation
 

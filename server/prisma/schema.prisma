@@ -177,6 +177,7 @@ model Task {
   runId        String?
   title        String
   description  String
+  assignedTeam String?
   assignedToId String?
   status       String       @default("OPEN")
   createdAt    DateTime     @default(now())

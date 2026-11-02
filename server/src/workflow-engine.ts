@@ -217,12 +217,20 @@ async function executeNode(
           runId,
           title: typeof config.title === 'string' && config.title.trim() ? config.title.trim() : 'Workflow task',
           description: typeof config.description === 'string' ? config.description : '',
+          assignedTeam: typeof context.assignedTeam === 'string' ? context.assignedTeam : null,
         },
       });
       return { result: { taskId: task.id, title: task.title } };
     }
-    case 'assign-team':
-      return { result: { assignedTeam: typeof config.team === 'string' ? config.team : 'Operations' } };
+    case 'assign-team': {
+      const assignedTeam = typeof config.team === 'string' && config.team.trim() ? config.team.trim() : 'Operations';
+      const taskId = typeof context.taskId === 'string' ? context.taskId : null;
+      const updated = taskId ? await prisma.task.updateMany({
+        where: { id: taskId, runId, workspaceId: workflow.workspace.id },
+        data: { assignedTeam },
+      }) : { count: 0 };
+      return { result: { assignedTeam, taskUpdated: updated.count > 0 } };
+    }
     case 'notification': {
       const notification = await prisma.notification.create({
         data: {

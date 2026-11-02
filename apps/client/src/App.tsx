@@ -1,7 +1,7 @@
 import { lazy, Suspense, useState } from 'react';
 import { BrowserRouter, Link, Navigate, Outlet, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { QueryClient, QueryClientProvider, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Activity, BarChart3, Bell, ChevronDown, CircleHelp, LayoutDashboard, LogOut, Menu, Moon, Plus, Settings2, Sun, Workflow as WorkflowIcon } from 'lucide-react';
+import { Activity, BarChart3, Bell, CircleHelp, LayoutDashboard, LogOut, Menu, Moon, Plus, Settings2, Sun, Workflow as WorkflowIcon } from 'lucide-react';
 import { apiRequest, getCurrentUser, type User } from './api';
 import './App.css';
 
@@ -212,7 +212,7 @@ function AppLayout({ user }: { user: User }) {
     <div className="workspace-shell" data-theme={darkMode ? 'dark' : 'light'}>
       <aside className={`sidebar ${sidebarOpen ? 'sidebar-open' : ''}`}>
         <div className="sidebar-brand"><Brand /><button className="icon-btn mobile-close" onClick={() => setSidebarOpen(false)} aria-label="Close navigation">×</button></div>
-        <div className="workspace-picker"><div className="workspace-avatar">W</div><span><strong>My workspace</strong><small>Personal workspace</small></span><ChevronDown size={15} /></div>
+        <div className="workspace-picker"><div className="workspace-avatar">W</div><span><strong>Workspaces</strong><small>All accessible workspaces</small></span></div>
         <div className="nav-caption">WORKSPACE</div>
         <nav className="sidebar-nav">
           {navigation.map(({ to, label, icon: Icon, end }) => {
@@ -233,7 +233,7 @@ function AppLayout({ user }: { user: User }) {
         <header className="workspace-topbar">
           <button className="icon-btn mobile-menu" onClick={() => setSidebarOpen(true)} aria-label="Open navigation"><Menu size={19} /></button>
           <div className="breadcrumb"><span>Workspace</span><span className="breadcrumb-divider">/</span><strong>{currentLabel}</strong></div>
-          <div className="topbar-actions"><Link className="topbar-cta" to="/app/workflows/new"><Plus size={16} /> New workflow</Link><button className="icon-btn" title="Toggle theme" aria-label="Toggle theme" onClick={() => setDarkMode((value) => { const next = !value; localStorage.setItem('autoflow-theme', next ? 'dark' : 'light'); return next; })}>{darkMode ? <Sun size={18} /> : <Moon size={18} />}</button><button className="icon-btn" title="Notifications" aria-label="Notifications"><Bell size={18} /></button><div className="topbar-avatar">{user.name.slice(0, 1).toUpperCase()}</div></div>
+          <div className="topbar-actions"><Link className="topbar-cta" to="/app/workflows/new"><Plus size={16} /> New workflow</Link><button className="icon-btn" title="Toggle theme" aria-label="Toggle theme" onClick={() => setDarkMode((value) => { const next = !value; localStorage.setItem('autoflow-theme', next ? 'dark' : 'light'); return next; })}>{darkMode ? <Sun size={18} /> : <Moon size={18} />}</button><Link className="icon-btn" title="Notifications" aria-label="Notifications" to="/app/admin#notifications"><Bell size={18} /></Link><div className="topbar-avatar">{user.name.slice(0, 1).toUpperCase()}</div></div>
         </header>
         <div className="page-content"><Outlet /></div>
       </div>
